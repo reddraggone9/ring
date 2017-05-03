@@ -26,6 +26,7 @@
 
 use {c, init, polyfill};
 use core;
+use std::io;
 
 // XXX: Replace with `const fn` when `const fn` is stable:
 // https://github.com/rust-lang/rust/issues/24111
@@ -207,6 +208,18 @@ impl Clone for Context {
             algorithm: self.algorithm,
         }
     }
+}
+
+impl io::Write for Context {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.update(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+
 }
 
 /// Returns the digest of `data` using the given digest algorithm.
@@ -833,5 +846,17 @@ mod tests {
         max_input_tests!(SHA256);
         max_input_tests!(SHA384);
         max_input_tests!(SHA512);
+    }
+
+    #[test]
+    fn test_context_writer() {
+        let test_string = b"hello, world";
+        for algorithm in &super::test_util::ALL_ALGORITHMS {
+            let one_shot = digest::digest(algorithm, test_string);
+            let mut context = digest::Context::new(algorithm);
+            let bytes_copied = ::std::io::copy(&mut &test_string[..], &mut context).unwrap();
+            assert_eq!(test_string.len() as u64, bytes_copied);
+            assert_eq!(one_shot.as_ref(), context.finish().as_ref());
+        }
     }
 }
